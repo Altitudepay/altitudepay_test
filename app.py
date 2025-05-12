@@ -298,8 +298,13 @@ REFRESH_INTERVAL_MS = 60 * 60 * 1000  # 1 hour
 def get_last_run():
     if not os.path.exists(LAST_RUN_FILE):
         return None
-    with open(LAST_RUN_FILE, "r") as f:
-        return datetime.fromisoformat(f.read().strip())
+    try:
+        with open(LAST_RUN_FILE, "r") as f:
+            content = f.read().strip()
+            return datetime.fromisoformat(content)
+    except Exception as e:
+        st.warning(f"⚠️ Could not parse last run time. Reason: {e}")
+        return None
 
 def update_last_run():
     with open(LAST_RUN_FILE, "w") as f:
@@ -341,12 +346,12 @@ if count > 0:
         days_left = 10 - (now - last_run).days
         st.info(f"⏳ Next update in {days_left} day(s).")
 
+
 # Show last retraining timestamp
 last_run_display = get_last_run()
 if last_run_display:
     st.info(f"🕒 Last retraining completed on: {last_run_display.strftime('%Y-%m-%d %H:%M:%S')} UTC")
 else:
     st.warning("⚠️ No retraining has been done yet.")
-
 
     
