@@ -120,8 +120,8 @@ def run_retraining_pipeline(csv_path="transaction.csv"):
         new_model_accuracy = accuracy_score(y_holdout, y_pred)
 
         msg = f"Old Accuracy: {old_acc * 100:.2f}%, New Accuracy: {new_model_accuracy * 100:.2f}%\n"
-        msg += f"AUC: {roc_auc_score(y_holdout, y_prob):.4f}\n"
-        msg += classification_report(y_holdout, y_pred, zero_division=0)
+        # msg += f"AUC: {roc_auc_score(y_holdout, y_prob):.4f}\n"
+        # msg += classification_report(y_holdout, y_pred, zero_division=0)
 
         if new_model_accuracy >= 0.87:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")

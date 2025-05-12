@@ -296,7 +296,7 @@ if predict:
 
 from streamlit_autorefresh import st_autorefresh
 
-# Automatically refresh the page every 900 seconds (15 mins)
+# Automatically refresh the page every 900 seconds (10 mins)
 count = st_autorefresh(interval=10 * 60 * 1000, key="cron_refresh")
 
 # Trigger function on refresh
