@@ -341,4 +341,12 @@ if count > 0:
         days_left = 10 - (now - last_run).days
         st.info(f"⏳ Next update in {days_left} day(s).")
 
+# Show last retraining timestamp
+last_run_display = get_last_run()
+if last_run_display:
+    st.info(f"🕒 Last retraining completed on: {last_run_display.strftime('%Y-%m-%d %H:%M:%S')} UTC")
+else:
+    st.warning("⚠️ No retraining has been done yet.")
+
+
     
