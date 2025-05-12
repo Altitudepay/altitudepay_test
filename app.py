@@ -4,14 +4,14 @@ import pickle
 import json
 import os
 import base64
-from datetime import datetime
+from datetime import datetime, timedelta
 import altair as alt
 from azure.storage.blob import BlobServiceClient
 import tempfile
 from dotenv import load_dotenv
 from retrain_model import run_retraining_pipeline
 load_dotenv()
-
+from streamlit_autorefresh import st_autorefresh
 # -------------------------
 # 🎯 Page Configuration
 # -------------------------
@@ -114,7 +114,6 @@ def predict_top_processors(bin_number, is_3d_encoded, top_n=5, threshold=0.80):
             "bin_prefix": bin_prefix,
             "bin_suffix": bin_suffix,
             "is_3d_encoded": is_3d_encoded,
-            # "bin_seen_flag": 1 if bin_known else 0,
             "bin_tx_count": bin_stats.get("bin_tx_count", global_fallback["bin_tx_count"]),
             "bin_success_rate": bin_success,
             "processor_success_rate": proc_success,
@@ -291,45 +290,55 @@ if predict:
     else:
         st.error("❌ No predictions could be made.")
 
-# pip install streamlit-autorefresh
-# pip install python-dotenv
+# ----------- Retraining Trigger ------------
+LAST_RUN_FILE = "last_run.txt"
+TEN_DAYS = timedelta(days=10)
+REFRESH_INTERVAL_MS = 60 * 60 * 1000  # 1 hour
 
-from streamlit_autorefresh import st_autorefresh
+def get_last_run():
+    if not os.path.exists(LAST_RUN_FILE):
+        return None
+    with open(LAST_RUN_FILE, "r") as f:
+        return datetime.fromisoformat(f.read().strip())
 
-# Automatically refresh the page every 900 seconds (10 mins)
-count = st_autorefresh(interval=10 * 60 * 1000, key="cron_refresh")
+def update_last_run():
+    with open(LAST_RUN_FILE, "w") as f:
+        f.write(datetime.utcnow().isoformat())
 
-# Trigger function on refresh
-if count > 0:
-    st.write("🔁 Auto-refresh detected, checking for job trigger...")
-    # ---------------------------
-    # Azure Blob Credentials
-    # ---------------------------
+def download_blob_to_file(blob_name, download_path):
     AZURE_STORAGE_CONNECTION_STRING = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
     BLOB_CONTAINER_NAME = os.getenv("BLOB_CONTAINER_NAME")
-    BLOB_FILENAME = "transaction.csv"  # Or dynamic naming if needed
 
-    def download_blob_to_file(blob_name, download_path):
-        blob_service_client = BlobServiceClient.from_connection_string(AZURE_STORAGE_CONNECTION_STRING)
-        container_client = blob_service_client.get_container_client(BLOB_CONTAINER_NAME)
-        blob_client = container_client.get_blob_client(blob_name)
-        with open(download_path, "wb") as f:
-            f.write(blob_client.download_blob().readall())
-        print(f"✅ Downloaded blob: {blob_name} to {download_path}")
+    blob_service_client = BlobServiceClient.from_connection_string(AZURE_STORAGE_CONNECTION_STRING)
+    container_client = blob_service_client.get_container_client(BLOB_CONTAINER_NAME)
+    blob_client = container_client.get_blob_client(blob_name)
 
-    download_blob_to_file(BLOB_FILENAME, "./" + BLOB_FILENAME)
+    with open(download_path, "wb") as f:
+        f.write(blob_client.download_blob().readall())
+    st.success(f"✅ Downloaded blob: {blob_name} to {download_path}")
 
-    # ✅ Trigger retrain.py automatically
-    import subprocess
+count = st_autorefresh(interval=REFRESH_INTERVAL_MS, key="cron_refresh")
+if count > 0:
+    last_run = get_last_run()
+    now = datetime.utcnow()
+    st.write("🔁 Auto-refresh detected, checking for job trigger...")
+    if last_run is None or (now - last_run) >= TEN_DAYS:
+        BLOB_FILENAME = "transaction.csv"
+        download_blob_to_file(BLOB_FILENAME, "./" + BLOB_FILENAME)
+        with st.spinner("Running retraining pipeline..."):
+            msg, old_acc, new_acc = run_retraining_pipeline()
 
-    with st.spinner("Running retraining pipeline..."):
-        msg, old_acc, new_acc = run_retraining_pipeline()
-
-    if new_acc is not None:
-        st.success("✅ Retraining successful!")
-        st.text(msg)
-        st.metric("Old Accuracy", f"{old_acc * 100:.2f}%")
-        st.metric("New Accuracy", f"{new_acc * 100:.2f}%")
+        if new_acc is not None:
+            update_last_run()
+            st.success("✅ Retraining successful!")
+            st.text(msg)
+            st.metric("Old Accuracy", f"{old_acc * 100:.2f}%")
+            st.metric("New Accuracy", f"{new_acc * 100:.2f}%")
+        else:
+            st.error("❌ Retraining failed.")
+            st.text(msg)
     else:
-        st.error("❌ Retraining failed.")
-        st.text(msg)
+        days_left = 10 - (now - last_run).days
+        st.info(f"⏳ Next update in {days_left} day(s).")
+
+    
