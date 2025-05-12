@@ -9,6 +9,7 @@ import altair as alt
 from azure.storage.blob import BlobServiceClient
 import tempfile
 from dotenv import load_dotenv
+from retrain_model import run_retraining_pipeline
 load_dotenv()
 
 # -------------------------
@@ -321,15 +322,14 @@ if count > 0:
     # ✅ Trigger retrain.py automatically
     import subprocess
 
-    try:
-        result = subprocess.run(
-            ["python", "retrain_model.py"],
-            check=True,
-            capture_output=True,
-            text=True
-        )
-        st.success("✅ Retrain script executed successfully!")
-        st.text(result.stdout)
-    except subprocess.CalledProcessError as e:
-        st.error("❌ Retrain script failed.")
-        st.text(e.stderr)
+    with st.spinner("Running retraining pipeline..."):
+        msg, old_acc, new_acc = run_retraining_pipeline()
+
+    if new_acc is not None:
+        st.success("✅ Retraining successful!")
+        st.text(msg)
+        st.metric("Old Accuracy", f"{old_acc * 100:.2f}%")
+        st.metric("New Accuracy", f"{new_acc * 100:.2f}%")
+    else:
+        st.error("❌ Retraining failed.")
+        st.text(msg)
