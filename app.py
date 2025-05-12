@@ -292,7 +292,7 @@ if predict:
 
 # ----------- Retraining Trigger ------------
 LAST_RUN_FILE = "last_run.txt"
-TEN_DAYS = timedelta(days=10)
+TEN_DAYS = timedelta(days=1)
 REFRESH_INTERVAL_MS = 60 * 60 * 1000  # 1 hour
 
 def get_last_run():
