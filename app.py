@@ -303,7 +303,6 @@ def get_last_run():
             content = f.read().strip()
             return datetime.fromisoformat(content)
     except Exception as e:
-        st.warning(f"⚠️ Could not parse last run time. Reason: {e}")
         return None
 
 def update_last_run():
