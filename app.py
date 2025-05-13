@@ -292,6 +292,7 @@ if predict:
 
 # ----------- Retraining Trigger ------------
 LAST_RUN_FILE = "last_run.txt"
+CRON_HISTORY_FILE = "cron_history.txt"
 TEN_DAYS = timedelta(days=1)
 REFRESH_INTERVAL_MS = 60 * 60 * 1000  # 1 hour
 
@@ -300,6 +301,15 @@ def get_last_run():
         return None
     try:
         with open(LAST_RUN_FILE, "r") as f:
+            content = f.read().strip()
+            return datetime.fromisoformat(content)
+    except Exception as e:
+        return None
+def get_refresh_time():
+    if not os.path.exists(CRON_HISTORY_FILE):
+        return None
+    try:
+        with open(CRON_HISTORY_FILE, "r") as f:
             content = f.read().strip()
             return datetime.fromisoformat(content)
     except Exception as e:
@@ -325,6 +335,7 @@ count = st_autorefresh(interval=REFRESH_INTERVAL_MS, key="cron_refresh")
 if count > 0:
     last_run = get_last_run()
     now = datetime.utcnow()
+    refresh_time = get_refresh_time()
     st.write("🔁 Auto-refresh detected, checking for job trigger...")
     if last_run is None or (now - last_run) >= TEN_DAYS:
         BLOB_FILENAME = "transaction.csv"
@@ -350,6 +361,12 @@ if count > 0:
 last_run_display = get_last_run()
 if last_run_display:
     st.info(f"🕒 Last retraining completed on: {last_run_display.strftime('%Y-%m-%d %H:%M:%S')} UTC")
+else:
+    st.warning("⚠️ No retraining has been done yet.")
+
+get_refresh_times = get_refresh_time()
+if get_refresh_times:
+    st.info(f"🕒 Last retraining completed on: {get_refresh_times.strftime('%Y-%m-%d %H:%M:%S')} UTC")
 else:
     st.warning("⚠️ No retraining has been done yet.")
 
