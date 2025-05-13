@@ -386,14 +386,14 @@ with tab2:
     def get_poor_processors_df(min_txns=500, approval_threshold=60.0):
         bin_proc_df = pd.DataFrame.from_dict(stats["bin_proc_stats"], orient="index").copy()
 
-        # Extract BIN and processor_id from tuple index
+        # Extract BIN and Processor ID
         bin_proc_df["bin"] = bin_proc_df.index.map(lambda x: x[0])
         bin_proc_df["processor_id"] = bin_proc_df.index.map(lambda x: x[1])
 
-        # Map processor_id to readable name using loaded JSON
-        
+        # Map processor ID ➝ Name using reversed JSON
         bin_proc_df["processor_name"] = bin_proc_df["processor_id"].map(reverse_processor_map).fillna(bin_proc_df["processor_id"])
-        # Compute approval rate
+
+        # Approval %
         bin_proc_df["approval_rate_percent"] = bin_proc_df["bin_processor_success_rate"] * 100
 
         # Flag poor performers
@@ -402,9 +402,9 @@ with tab2:
             (bin_proc_df["bin_processor_tx_count"] >= min_txns)
         )
 
-        # Filter and clean
+        # Final filtered DataFrame
         poor_df = bin_proc_df[bin_proc_df["is_poor"]].copy()
-        poor_df = poor_df[["bin", "processor_name", "bin_processor_tx_count", "bin_processor_success_count", "approval_rate_percent"]]
+        poor_df = poor_df[["bin", "processor_id", "processor_name", "bin_processor_tx_count", "bin_processor_success_count", "approval_rate_percent"]]
         return poor_df.sort_values(by="approval_rate_percent")
 
     poor_processor_df = get_poor_processors_df(min_txns, approval_threshold)
@@ -417,7 +417,13 @@ with tab2:
         poor_chart = alt.Chart(poor_processor_df).mark_bar().encode(
             x=alt.X("processor_name:N", sort="-y", title="Processor"),
             y=alt.Y("approval_rate_percent:Q", title="Approval Rate (%)"),
-            tooltip=["bin", "processor_name", "bin_processor_tx_count", "approval_rate_percent"]
+            tooltip=[
+                alt.Tooltip("bin", title="BIN"),
+                # alt.Tooltip("processor_id", title="Processor ID"),
+                alt.Tooltip("processor_name", title="Processor Name"),
+                alt.Tooltip("bin_processor_tx_count", title="Tx Count"),
+                alt.Tooltip("approval_rate_percent", title="Approval Rate (%)", format=".2f")
+            ]
         ).properties(height=350)
         st.altair_chart(poor_chart, use_container_width=True)
 
@@ -425,3 +431,4 @@ with tab2:
         st.download_button("📥 Download Poor Processors CSV", csv_poor, "poor_processors.csv", "text/csv")
     else:
         st.success("🎉 No poor-performing processors found based on current threshold.")
+
