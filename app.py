@@ -440,6 +440,7 @@ api = FastAPI()
 def cron_retrain():
     last_run = get_last_run()
     now = datetime.utcnow()
+    update_refresh_time()
     if last_run is None or (now - last_run) >= TEN_DAYS:
         download_blob_to_file("transaction.csv", "./transaction.csv")
         msg, _, new_acc = run_retraining_pipeline()
