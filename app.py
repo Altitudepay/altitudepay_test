@@ -299,7 +299,7 @@ with tab1:
 
     LAST_RUN_BLOB = "last_run.txt"
     CRON_HISTORY_BLOB = "cron_history.txt"
-    TEN_DAYS = timedelta(days=10)
+    TEN_DAYS = timedelta(days=1)
     REFRESH_INTERVAL_MS = 5 * 60 * 1000
     # Replace file-based helpers with Azure Blob-backed ones
     def get_last_run():
