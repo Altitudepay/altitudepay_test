@@ -366,8 +366,8 @@ else:
 
 get_refresh_times = get_refresh_time()
 if get_refresh_times:
-    st.info(f"🕒 Last retraining completed on: {get_refresh_times.strftime('%Y-%m-%d %H:%M:%S')} UTC")
+    st.info(f"🕒 Last refresh on: {get_refresh_times.strftime('%Y-%m-%d %H:%M:%S')} UTC")
 else:
-    st.warning("⚠️ No retraining has been done yet.")
+    st.warning("⚠️ No refresh time found yet.")
 
     
