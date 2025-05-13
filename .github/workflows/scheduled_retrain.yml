@@ -1,0 +1,13 @@
+# .github/workflows/scheduled_retrain.yml
+name: Scheduled Retrain
+on:
+  schedule:
+    - cron: '0 0 */10 * *'  # every 10 days at midnight UTC
+
+jobs:
+  retrain:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Streamlit Cron
+        run: |
+          curl -X POST https://altitudepaytest.streamlit.app/_cron_retrain

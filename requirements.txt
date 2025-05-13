@@ -7,3 +7,5 @@ streamlit-autorefresh
 python-dotenv
 azure-storage-blob
 pandas
+fastapi
+uvicorn

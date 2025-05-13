@@ -291,39 +291,40 @@ with tab1:
             st.info(f"📝 Log saved as: `{log_path}`")
         else:
             st.error("❌ No predictions could be made.")
-
     # ----------- Retraining Trigger ------------
-    LAST_RUN_FILE = "last_run.txt"
-    CRON_HISTORY_FILE = "cron_history.txt"
-    TEN_DAYS = timedelta(days=1)
-    REFRESH_INTERVAL_MS = 5 * 60 * 1000  # 1 hour
+    AZ_CONN = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
+    AZ_CONTAINER = os.getenv("BLOB_CONTAINER_NAME")
+    blob_service = BlobServiceClient.from_connection_string(AZ_CONN)
+    container_client = blob_service.get_container_client(AZ_CONTAINER)
 
+    LAST_RUN_BLOB = "last_run.txt"
+    CRON_HISTORY_BLOB = "cron_history.txt"
+    TEN_DAYS = timedelta(days=10)
+    REFRESH_INTERVAL_MS = 5 * 60 * 1000
+    # Replace file-based helpers with Azure Blob-backed ones
     def get_last_run():
-        if not os.path.exists(LAST_RUN_FILE):
-            return None
         try:
-            with open(LAST_RUN_FILE, "r") as f:
-                content = f.read().strip()
-                return datetime.fromisoformat(content)
-        except Exception as e:
-            return None
-    def get_refresh_time():
-        if not os.path.exists(CRON_HISTORY_FILE):
-            return None
-        try:
-            with open(CRON_HISTORY_FILE, "r") as f:
-                content = f.read().strip()
-                return datetime.fromisoformat(content)
-        except Exception as e:
+            blob = container_client.get_blob_client(LAST_RUN_BLOB)
+            data = blob.download_blob().readall().decode()
+            return datetime.fromisoformat(data)
+        except Exception:
             return None
 
     def update_last_run():
-        with open(LAST_RUN_FILE, "w") as f:
-            f.write(datetime.utcnow().isoformat())
+        blob = container_client.get_blob_client(LAST_RUN_BLOB)
+        blob.upload_blob(datetime.utcnow().isoformat(), overwrite=True)
+
+    def get_refresh_time():
+        try:
+            blob = container_client.get_blob_client(CRON_HISTORY_BLOB)
+            data = blob.download_blob().readall().decode()
+            return datetime.fromisoformat(data)
+        except Exception:
+            return None
 
     def update_refresh_time():
-        with open(CRON_HISTORY_FILE, "w") as f:
-            f.write(datetime.utcnow().isoformat())
+        blob = container_client.get_blob_client(CRON_HISTORY_BLOB)
+        blob.upload_blob(datetime.utcnow().isoformat(), overwrite=True)
 
     def download_blob_to_file(blob_name, download_path):
         AZURE_STORAGE_CONNECTION_STRING = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
@@ -337,6 +338,7 @@ with tab1:
             f.write(blob_client.download_blob().readall())
         st.success(f"✅ Downloaded blob: {blob_name} to {download_path}")
 
+    # Client-side auto-refresh and retraining logic remains the same
     count = st_autorefresh(interval=REFRESH_INTERVAL_MS, key="cron_refresh")
     if count > 0:
         last_run = get_last_run()
@@ -344,35 +346,30 @@ with tab1:
         update_refresh_time()
         st.write("🔁 Auto-refresh detected, checking for job trigger...")
         if last_run is None or (now - last_run) >= TEN_DAYS:
-            BLOB_FILENAME = "transaction.csv"
-            download_blob_to_file(BLOB_FILENAME, "./" + BLOB_FILENAME)
+            download_blob_to_file("transaction.csv", "./transaction.csv")
             with st.spinner("Running retraining pipeline..."):
                 msg, old_acc, new_acc = run_retraining_pipeline()
-
             if new_acc is not None:
                 update_last_run()
                 st.success("✅ Retraining successful!")
                 st.text(msg)
-                # st.metric("Old Accuracy", f"{old_acc * 100:.2f}%")
-                # st.metric("New Accuracy", f"{new_acc * 100:.2f}%")
             else:
                 st.error("❌ Retraining failed.")
                 st.text(msg)
         else:
-            days_left = 10 - (now - last_run).days
+            days_left = TEN_DAYS.days - (now - last_run).days
             st.info(f"⏳ Next update in {days_left} day(s).")
 
-
-    # Show last retraining timestamp
-    last_run_display = get_last_run()
-    if last_run_display:
-        st.info(f"🕒 Last retraining completed on: {last_run_display.strftime('%Y-%m-%d %H:%M:%S')} UTC")
+    # Show status
+    last = get_last_run()
+    if last:
+        st.info(f"🕒 Last retraining: {last.strftime('%Y-%m-%d %H:%M:%S')} UTC")
     else:
         st.warning("⚠️ No retraining has been done yet.")
 
-    get_refresh_times = get_refresh_time()
-    if get_refresh_times:
-        st.info(f"🕒 Last refresh on: {get_refresh_times.strftime('%Y-%m-%d %H:%M:%S')} UTC")
+    ref = get_refresh_time()
+    if ref:
+        st.info(f"🕒 Last refresh: {ref.strftime('%Y-%m-%d %H:%M:%S')} UTC")
     else:
         st.warning("⚠️ No refresh time found yet.")
 
@@ -432,3 +429,27 @@ with tab2:
     else:
         st.success("🎉 No poor-performing processors found based on current threshold.")
 
+# FastAPI endpoint for external scheduler
+from fastapi import FastAPI
+import threading
+import uvicorn
+
+api = FastAPI()
+
+@api.post("/_cron_retrain")
+def cron_retrain():
+    last_run = get_last_run()
+    now = datetime.utcnow()
+    if last_run is None or (now - last_run) >= TEN_DAYS:
+        download_blob_to_file("transaction.csv", "./transaction.csv")
+        msg, _, new_acc = run_retraining_pipeline()
+        if new_acc is not None:
+            update_last_run()
+            return {"status": "success", "message": msg}
+    return {"status": "skipped", "message": "Not due yet."}
+
+
+def _serve_api():
+    uvicorn.run(api, host="0.0.0.0", port=8001)
+
+threading.Thread(target=_serve_api, daemon=True).start()
