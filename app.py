@@ -12,6 +12,7 @@ from dotenv import load_dotenv
 from retrain_model import run_retraining_pipeline
 load_dotenv()
 from streamlit_autorefresh import st_autorefresh
+from db_utils import run_bin_query
 # -------------------------
 # 🎯 Page Configuration
 # -------------------------
@@ -51,6 +52,13 @@ st.markdown(f"""
 # -------------------------
 # 🧠 Load Model & Stats
 # -------------------------
+@st.cache_data(ttl=3600)
+def get_last_month_bins():
+    return run_bin_query()
+
+last_month_bin_list = get_last_month_bins()
+last_month_bin_list = [int(b) for b in last_month_bin_list]
+
 @st.cache_resource
 def load_artifacts():
     # Always load the latest model
@@ -405,7 +413,7 @@ with tab2:
         return poor_df.sort_values(by="approval_rate_percent")
 
     poor_processor_df = get_poor_processors_df(min_txns, approval_threshold)
-
+    poor_processor_df = poor_processor_df[poor_processor_df["bin"].isin(last_month_bin_list)]
     if not poor_processor_df.empty:
         st.success(f"🚩 Found {len(poor_processor_df)} poor-performing BIN-Processor combinations.")
         st.dataframe(poor_processor_df, use_container_width=True)
