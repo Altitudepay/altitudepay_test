@@ -9,3 +9,4 @@ azure-storage-blob
 pandas
 fastapi
 uvicorn
+psycopg2-binary
