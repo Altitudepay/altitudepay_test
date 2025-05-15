@@ -12,7 +12,7 @@ from dotenv import load_dotenv
 from retrain_model import run_retraining_pipeline
 load_dotenv()
 from streamlit_autorefresh import st_autorefresh
-from db_utils import run_bin_query
+from db_utils import run_bin_query, run_processor_query
 # -------------------------
 # 🎯 Page Configuration
 # -------------------------
@@ -59,6 +59,12 @@ def get_last_month_bins():
 last_month_bin_list = get_last_month_bins()
 last_month_bin_list = [int(b) for b in last_month_bin_list]
 
+@st.cache_data(ttl=3600)
+def get_last_month_processors():
+    return run_processor_query()
+last_month_processor_list = get_last_month_processors()
+last_month_processor_list = [str(p) for p in last_month_processor_list]
+
 @st.cache_resource
 def load_artifacts():
     # Always load the latest model
@@ -102,7 +108,9 @@ def predict_top_processors(bin_number, is_3d_encoded, top_n=5, threshold=0.80):
     bin_known = bin_number in stats["bin_tx"]
 
     rows = []
-    for processor_id in stats["all_processors"]:
+    for processor_id in [pid for pid in stats["all_processors"] if reverse_processor_map.get(pid) in last_month_processor_list]:
+    # for processor_id in stats["all_processors"]:
+        print(reverse_processor_map.get(processor_id), processor_id)
         if bin_known:
             bin_stats = stats["bin_tx"].get(bin_number, {})
             bin_success = stats["bin_success"].get(bin_number, {}).get("bin_success_rate", 0.0)
